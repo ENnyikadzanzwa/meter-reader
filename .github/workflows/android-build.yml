@@ -12,6 +12,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # Ensure full git history for proper Gradle wrapper validation
+        fetch-depth: 0
     
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -28,6 +31,14 @@ jobs:
       run: |
         npm install
         npm install -g expo-cli
+    
+    - name: Prepare Gradle Wrapper
+      run: |
+        cd android
+        # Ensure Gradle wrapper has correct permissions
+        chmod +x ./gradlew
+        chmod +x gradlew
+        ls -l gradlew
     
     - name: Diagnose System Environment
       run: |
@@ -54,12 +65,11 @@ jobs:
     - name: Check Gradle and Kotlin versions
       run: |
         cd android
-        ./gradlew --version
+        ./gradlew --version || cat ./gradlew
         
     - name: Build Android APK with maximum verbosity
       run: |
         cd android
-        chmod +x ./gradlew
         ./gradlew assembleRelease --stacktrace --info --debug
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
