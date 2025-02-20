@@ -13,7 +13,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        # Ensure full git history for proper Gradle wrapper validation
         fetch-depth: 0
     
     - name: Set up JDK 17
@@ -21,26 +20,26 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+        cache: 'gradle'
     
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+        cache: 'npm'
     
-    - name: Install dependencies
+    - name: Install Expo CLI and dependencies
       run: |
-        npm install
         npm install -g expo-cli
+        npm ci
     
     - name: Prepare Gradle Wrapper
       run: |
         cd android
-        # Ensure Gradle wrapper has correct permissions
         chmod +x ./gradlew
-        chmod +x gradlew
-        ls -l gradlew
+        ./gradlew wrapper --gradle-version 8.5
     
-    - name: Diagnose System Environment
+    - name: Diagnose Environment
       run: |
         echo "Java Version:"
         java -version
@@ -50,38 +49,61 @@ jobs:
         npm --version
         echo "\nExpo CLI Version:"
         expo --version
+        echo "\nGradle Version:"
+        ./gradlew --version
     
-    - name: Prebuild Android project
+    - name: Prebuild Expo Android Project
       run: |
         npx expo prebuild --platform android
         
     - name: List Android Project Structure
       run: |
         cd android
-        find . -type d
-        echo "\nGradle Files:"
-        find . -name "*.gradle"
+        find . -type f \( -name "*.gradle" -o -name "*.properties" \)
+        echo "\nProject Files:"
+        ls -R
         
-    - name: Check Gradle and Kotlin versions
+    - name: Validate Gradle Wrapper
+      uses: gradle/wrapper-validation-action@v2
+    
+    - name: Build Android APK
       run: |
         cd android
-        ./gradlew --version || cat ./gradlew
-        
-    - name: Build Android APK with maximum verbosity
-      run: |
-        cd android
-        ./gradlew assembleRelease --stacktrace --info --debug
+        ./gradlew assembleRelease \
+          -Pandroid.useAndroidX=true \
+          -Pandroid.enableJetifier=true \
+          --stacktrace \
+          --info \
+          --debug \
+          --scan
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
+    
+    - name: Sign APK
+      run: |
+        cd android
+        # Generate a temporary keystore for signing
+        keytool -genkey -v -keystore app/release.keystore \
+          -alias releasekey \
+          -keyalg RSA -keysize 2048 \
+          -validity 10000 \
+          -storepass temppassword \
+          -keypass temppassword \
+          -dname "CN=MeterReader, OU=Development, O=YourOrg, L=YourCity, S=YourState, C=YourCountry"
+        
+        # Sign the APK
+        ./gradlew signingReport
     
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: app-release
-        path: android/app/build/outputs/apk/release/*.apk
+        name: meter-reader-release
+        path: |
+          android/app/build/outputs/apk/release/*.apk
+          android/app/build/outputs/mapping/release/mapping.txt
         retention-days: 5
     
-    - name: Upload Comprehensive Build Logs
+    - name: Upload Build Diagnostics
       if: failure()
       uses: actions/upload-artifact@v4
       with:
