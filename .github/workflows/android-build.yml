@@ -32,6 +32,7 @@ jobs:
       run: |
         npm install -g expo-cli
         npm ci
+        npm install -g sharp-cli
     
     - name: Prepare Gradle Wrapper
       run: |
@@ -56,6 +57,13 @@ jobs:
       run: |
         npx expo prebuild --platform android
         
+    - name: Optimize Assets
+      run: |
+        # Optimize images and remove unnecessary files
+        find . -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) \
+          -exec sharp resize 1024 {} {}.optimized \;
+        find . -type f -name "*.optimized" -exec mv {} {} \;
+        
     - name: List Android Project Structure
       run: |
         cd android
@@ -72,12 +80,22 @@ jobs:
         ./gradlew assembleRelease \
           -Pandroid.useAndroidX=true \
           -Pandroid.enableJetifier=true \
+          -Porg.gradle.caching=true \
+          -Porg.gradle.parallel=true \
+          -Porg.gradle.configureondemand=true \
           --stacktrace \
           --info \
-          --debug \
           --scan
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
+    
+    - name: Compress APK
+      run: |
+        cd android/app/build/outputs/apk/release
+        for apk in *.apk; do
+          echo "Compressing $apk..."
+          advzip -z -4 "$apk"
+        done
     
     - name: Sign APK
       run: |
