@@ -33,8 +33,9 @@ jobs:
         chmod +x ./gradlew
         ./gradlew assembleRelease
     
-    - name: Upload APK
+    - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-release
         path: android/app/build/outputs/apk/release/*.apk
+        retention-days: 5
