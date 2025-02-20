@@ -65,17 +65,25 @@ jobs:
     - name: Build Android APK
       run: |
         cd android
-        # Explicitly use ./gradlew with full path
+        # Explicitly use ./gradlew with full path and reduced parallelism
         /bin/bash -c "./gradlew assembleRelease \
           -Pandroid.useAndroidX=true \
           -Pandroid.enableJetifier=true \
           -Porg.gradle.caching=true \
-          -Porg.gradle.parallel=true \
-          -Porg.gradle.configureondemand=true \
+          -Porg.gradle.parallel=false \
+          -Porg.gradle.workers.max=2 \
+          -Porg.gradle.configureondemand=false \
           --stacktrace \
-          --info"
+          --info \
+          --warning-mode all"
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
+    
+    - name: Print Gradle Daemon Logs
+      if: always()
+      run: |
+        cd android
+        find ~/.gradle -name "*.log" -type f -print -exec cat {} \;
     
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
