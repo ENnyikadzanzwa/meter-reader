@@ -25,19 +25,24 @@ jobs:
         node-version: '18'
     
     - name: Install dependencies
-      run: npm install
-    
-    - name: Install Expo CLI
-      run: npm install -g expo-cli
+      run: |
+        npm install
+        npm install -g expo-cli
     
     - name: Prebuild Android project
-      run: npx expo prebuild --platform android
-    
-    - name: Build Android APK
+      run: |
+        npx expo prebuild --platform android
+        
+    - name: Check Gradle and Kotlin versions
+      run: |
+        cd android
+        ./gradlew --version
+        
+    - name: Build Android APK with verbose output
       run: |
         cd android
         chmod +x ./gradlew
-        ./gradlew assembleRelease
+        ./gradlew assembleRelease --info --stacktrace
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
     
@@ -46,4 +51,14 @@ jobs:
       with:
         name: app-release
         path: android/app/build/outputs/apk/release/*.apk
+        retention-days: 5
+    
+    - name: Upload Build Logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          android/app/build/outputs/logs/
+          android/build/reports/
         retention-days: 5
