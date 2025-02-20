@@ -29,20 +29,38 @@ jobs:
         npm install
         npm install -g expo-cli
     
+    - name: Diagnose System Environment
+      run: |
+        echo "Java Version:"
+        java -version
+        echo "\nNode.js Version:"
+        node --version
+        echo "\nNPM Version:"
+        npm --version
+        echo "\nExpo CLI Version:"
+        expo --version
+    
     - name: Prebuild Android project
       run: |
         npx expo prebuild --platform android
+        
+    - name: List Android Project Structure
+      run: |
+        cd android
+        find . -type d
+        echo "\nGradle Files:"
+        find . -name "*.gradle"
         
     - name: Check Gradle and Kotlin versions
       run: |
         cd android
         ./gradlew --version
         
-    - name: Build Android APK with verbose output
+    - name: Build Android APK with maximum verbosity
       run: |
         cd android
         chmod +x ./gradlew
-        ./gradlew assembleRelease --info --stacktrace
+        ./gradlew assembleRelease --stacktrace --info --debug
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
     
@@ -53,12 +71,14 @@ jobs:
         path: android/app/build/outputs/apk/release/*.apk
         retention-days: 5
     
-    - name: Upload Build Logs
+    - name: Upload Comprehensive Build Logs
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: build-logs
+        name: build-diagnostics
         path: |
-          android/app/build/outputs/logs/
-          android/build/reports/
+          android/app/build/outputs/
+          android/build/
+          android/app/build/reports/
+          android/app/build/tmp/
         retention-days: 5
