@@ -73,8 +73,7 @@ jobs:
           -Porg.gradle.parallel=true \
           -Porg.gradle.configureondemand=true \
           --stacktrace \
-          --info \
-          --scan"
+          --info"
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
     
