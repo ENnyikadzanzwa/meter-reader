@@ -1,0 +1,44 @@
+workflows:
+  android-workflow:
+    name: Android Expo Build
+    instance_type: mac_mini
+    environment:
+      groups:
+        - expo
+      vars:
+        EXPO_CLI_VERSION: 6.x
+        NODE_OPTIONS: --max_old_space_size=4096
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'main'
+          include: true
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm install
+      
+      - name: Install Expo CLI
+        script: |
+          npm install -g expo-cli@${EXPO_CLI_VERSION}
+      
+      - name: Prebuild Android project
+        script: |
+          npx expo prebuild --platform android
+      
+      - name: Build Android app
+        script: |
+          cd android
+          ./gradlew assembleRelease
+    
+    artifacts:
+      - android/app/build/outputs/apk/release/*.apk
+    
+    publishing:
+      email:
+        recipients:
+          - nyikadzanzwaemmanuelnyasha@gmail.com
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: production
