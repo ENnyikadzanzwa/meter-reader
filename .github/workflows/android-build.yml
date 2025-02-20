@@ -32,52 +32,41 @@ jobs:
       run: |
         npm install -g expo-cli
         npm ci
-        npm install -g sharp-cli
+    
+    - name: Diagnose Prebuild Environment
+      run: |
+        pwd
+        ls -la
+        echo "\nContents of android directory:"
+        ls -la android
     
     - name: Prepare Gradle Wrapper
       run: |
         cd android
-        chmod +x ./gradlew
-        ./gradlew wrapper --gradle-version 8.5
-    
-    - name: Diagnose Environment
-      run: |
-        echo "Java Version:"
-        java -version
-        echo "\nNode.js Version:"
-        node --version
-        echo "\nNPM Version:"
-        npm --version
-        echo "\nExpo CLI Version:"
-        expo --version
-        echo "\nGradle Version:"
-        ./gradlew --version
+        # Ensure Gradle wrapper has correct permissions
+        chmod +x gradlew
+        chmod +x gradlew.bat
+        ls -l gradlew*
     
     - name: Prebuild Expo Android Project
       run: |
         npx expo prebuild --platform android
-        
-    - name: Optimize Assets
+    
+    - name: Diagnose Prebuild Results
       run: |
-        # Optimize images and remove unnecessary files
-        find . -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) \
-          -exec sharp resize 1024 {} {}.optimized \;
-        find . -type f -name "*.optimized" -exec mv {} {} \;
-        
-    - name: List Android Project Structure
-      run: |
-        cd android
-        find . -type f \( -name "*.gradle" -o -name "*.properties" \)
-        echo "\nProject Files:"
-        ls -R
-        
+        pwd
+        ls -la
+        echo "\nContents of android directory after prebuild:"
+        ls -la android
+    
     - name: Validate Gradle Wrapper
       uses: gradle/wrapper-validation-action@v2
     
     - name: Build Android APK
       run: |
         cd android
-        ./gradlew assembleRelease \
+        # Explicitly use ./gradlew with full path
+        /bin/bash -c "./gradlew assembleRelease \
           -Pandroid.useAndroidX=true \
           -Pandroid.enableJetifier=true \
           -Porg.gradle.caching=true \
@@ -85,32 +74,9 @@ jobs:
           -Porg.gradle.configureondemand=true \
           --stacktrace \
           --info \
-          --scan
+          --scan"
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
-    
-    - name: Compress APK
-      run: |
-        cd android/app/build/outputs/apk/release
-        for apk in *.apk; do
-          echo "Compressing $apk..."
-          advzip -z -4 "$apk"
-        done
-    
-    - name: Sign APK
-      run: |
-        cd android
-        # Generate a temporary keystore for signing
-        keytool -genkey -v -keystore app/release.keystore \
-          -alias releasekey \
-          -keyalg RSA -keysize 2048 \
-          -validity 10000 \
-          -storepass temppassword \
-          -keypass temppassword \
-          -dname "CN=MeterReader, OU=Development, O=YourOrg, L=YourCity, S=YourState, C=YourCountry"
-        
-        # Sign the APK
-        ./gradlew signingReport
     
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
