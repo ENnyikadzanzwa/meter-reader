@@ -32,32 +32,53 @@ jobs:
       run: |
         npm install -g expo-cli
         npm ci
+        npm install -g npm-check-updates
+    
+    - name: Check Dependency Versions
+      run: |
+        echo "Node.js version:"
+        node --version
+        echo "\nNPM version:"
+        npm --version
+        echo "\nExpo CLI version:"
+        expo --version
+        echo "\nDependency check:"
+        npm-check-updates
     
     - name: Diagnose Prebuild Environment
       run: |
         pwd
         ls -la
         echo "\nContents of android directory:"
-        ls -la android
+        ls -la android || echo "Android directory not found"
     
     - name: Prepare Gradle Wrapper
       run: |
         cd android
-        # Ensure Gradle wrapper has correct permissions
-        chmod +x gradlew
-        chmod +x gradlew.bat
+        chmod +x gradlew || echo "Could not set execute permissions on gradlew"
         ls -l gradlew*
     
     - name: Prebuild Expo Android Project
       run: |
-        npx expo prebuild --platform android
+        npx expo prebuild --platform android || {
+          echo "Prebuild failed. Checking project structure..."
+          pwd
+          ls -la
+          echo "\nNode modules:"
+          ls -la node_modules
+          echo "\nExpo config:"
+          cat app.json
+          exit 1
+        }
     
-    - name: Diagnose Prebuild Results
+    - name: List Project Structure
       run: |
-        pwd
+        echo "Root directory:"
         ls -la
-        echo "\nContents of android directory after prebuild:"
+        echo "\nAndroid directory:"
         ls -la android
+        echo "\nGradle files:"
+        find android -name "*.gradle"
     
     - name: Validate Gradle Wrapper
       uses: gradle/wrapper-validation-action@v2
@@ -65,8 +86,8 @@ jobs:
     - name: Build Android APK
       run: |
         cd android
-        # Explicitly use ./gradlew with full path and reduced parallelism
-        /bin/bash -c "./gradlew assembleRelease \
+        # Capture detailed build output
+        ./gradlew assembleRelease \
           -Pandroid.useAndroidX=true \
           -Pandroid.enableJetifier=true \
           -Porg.gradle.caching=true \
@@ -75,9 +96,48 @@ jobs:
           -Porg.gradle.configureondemand=false \
           --stacktrace \
           --info \
-          --warning-mode all"
+          --warning-mode all \
+          2>&1 | tee build-output.log
+        
+        # Check build output for specific errors
+        grep -E "ERROR|FAILURE" build-output.log && exit 1
       env:
         JAVA_HOME: ${{ steps.setup-java.outputs.path }}
+    
+    - name: Diagnose Build Failure
+      if: failure()
+      run: |
+        echo "Detailed error diagnosis:"
+        cd android
+        echo "\nBuild output log:"
+        cat build-output.log
+        echo "\nGradle daemon logs:"
+        find ~/.gradle -name "*.log" -type f -print -exec cat {} \;
+        echo "\nSystem information:"
+        uname -a
+        java -version
+    
+    - name: Upload Build Diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-diagnostics
+        path: |
+          android/build-output.log
+          android/app/build/outputs/
+          android/build/
+          android/app/build/reports/
+          android/app/build/tmp/
+        retention-days: 5
+    
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: meter-reader-release
+        path: |
+          android/app/build/outputs/apk/release/*.apk
+          android/app/build/outputs/mapping/release/mapping.txt
+        retention-days: 5
     
     - name: Print Gradle Daemon Logs
       if: always()
