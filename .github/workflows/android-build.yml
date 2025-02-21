@@ -38,11 +38,18 @@ jobs:
       run: |
            npx expo prebuild --platform android
     
-    - name: Build Android APK
+    - name: Build Android APK with Detailed Logging
       run: |
            cd android
            chmod +x ./gradlew
-           ./gradlew assembleDebug
+           ./gradlew assembleDebug --stacktrace --info
+    
+    - name: Upload build logs
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: android/build/reports
+        retention-days: 3
     
     - name: Upload application
       uses: actions/upload-artifact@v4
