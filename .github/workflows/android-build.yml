@@ -32,133 +32,65 @@ jobs:
       run: |
         npm install -g expo-cli
         npm ci
-        npm install -g npm-check-updates
-    
-    - name: Check Dependency Versions
-      run: |
-        echo "Node.js version:"
-        node --version
-        echo "\nNPM version:"
-        npm --version
-        echo "\nExpo CLI version:"
-        expo --version
-        echo "\nDependency check:"
-        npm-check-updates
-    
-    - name: Diagnose Prebuild Environment
-      run: |
-        pwd
-        ls -la
-        echo "\nContents of android directory:"
-        ls -la android || echo "Android directory not found"
-    
-    - name: Prepare Gradle Wrapper
-      run: |
-        cd android
-        chmod +x gradlew || echo "Could not set execute permissions on gradlew"
-        ls -l gradlew*
     
     - name: Prebuild Expo Android Project
       run: |
-        npx expo prebuild --platform android || {
-          echo "Prebuild failed. Checking project structure..."
-          pwd
-          ls -la
-          echo "\nNode modules:"
-          ls -la node_modules
-          echo "\nExpo config:"
-          cat app.json
-          exit 1
-        }
+        npx expo prebuild --platform android --clean
     
-    - name: List Project Structure
-      run: |
-        echo "Root directory:"
-        ls -la
-        echo "\nAndroid directory:"
-        ls -la android
-        echo "\nGradle files:"
-        find android -name "*.gradle"
-    
-    - name: Validate Gradle Wrapper
-      uses: gradle/wrapper-validation-action@v2
-    
-    - name: Build Android APK
+    - name: Inspect Android Project Structure
       run: |
         cd android
-        # Capture detailed build output
+        echo "Listing all .gradle files:"
+        find . -name "*.gradle"
+        echo "\nAndroid project structure:"
+        tree -L 3
+        echo "\nChecking build.gradle contents:"
+        cat app/build.gradle
+    
+    - name: Validate Gradle Configuration
+      run: |
+        cd android
+        ./gradlew help \
+          --warning-mode all \
+          -Porg.gradle.warning.mode=all \
+          -Porg.gradle.logging.level=info
+    
+    - name: Build Android APK with Verbose Logging
+      run: |
+        cd android
+        # Detailed build command with maximum verbosity
         ./gradlew assembleRelease \
+          -Pandroid.injected.build.model.only.versioned=3 \
           -Pandroid.useAndroidX=true \
           -Pandroid.enableJetifier=true \
           -Porg.gradle.caching=true \
           -Porg.gradle.parallel=false \
-          -Porg.gradle.workers.max=2 \
-          -Porg.gradle.configureondemand=false \
+          -Porg.gradle.warning.mode=all \
+          -Porg.gradle.logging.level=debug \
           --stacktrace \
           --info \
-          --warning-mode all \
-          2>&1 | tee build-output.log
+          --debug
+    
+    - name: Diagnose APK Build Issues
+      if: failure()
+      run: |
+        cd android
+        echo "Checking Gradle build cache:"
+        ls -la ~/.gradle
         
-        # Check build output for specific errors
-        grep -E "ERROR|FAILURE" build-output.log && exit 1
-      env:
-        JAVA_HOME: ${{ steps.setup-java.outputs.path }}
+        echo "\nChecking Android SDK:"
+        ls -la /usr/local/lib/android/sdk
+        
+        echo "\nChecking Android project dependencies:"
+        ./gradlew dependencies
+        
+        echo "\nChecking build configuration:"
+        ./gradlew properties
     
-    - name: Diagnose Build Failure
-      if: failure()
-      run: |
-        echo "Detailed error diagnosis:"
-        cd android
-        echo "\nBuild output log:"
-        cat build-output.log
-        echo "\nGradle daemon logs:"
-        find ~/.gradle -name "*.log" -type f -print -exec cat {} \;
-        echo "\nSystem information:"
-        uname -a
-        java -version
-    
-    - name: Upload Build Diagnostics
-      if: failure()
+    - name: Upload APK Build Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: build-diagnostics
-        path: |
-          android/build-output.log
-          android/app/build/outputs/
-          android/build/
-          android/app/build/reports/
-          android/app/build/tmp/
-        retention-days: 5
-    
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: meter-reader-release
-        path: |
-          android/app/build/outputs/apk/release/*.apk
-          android/app/build/outputs/mapping/release/mapping.txt
-        retention-days: 5
-    
-    - name: Print Gradle Daemon Logs
-      if: always()
-      run: |
-        cd android
-        find ~/.gradle -name "*.log" -type f -print -exec cat {} \;
-    
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: meter-reader-release
-        path: |
-          android/app/build/outputs/apk/release/*.apk
-          android/app/build/outputs/mapping/release/mapping.txt
-        retention-days: 5
-    
-    - name: Upload Build Diagnostics
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-diagnostics
+        name: android-build-diagnostics
         path: |
           android/app/build/outputs/
           android/build/
